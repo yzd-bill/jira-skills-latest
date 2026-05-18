@@ -1,11 +1,11 @@
-﻿---
+---
 name: create-jira-tickets
 description: Create Jira tickets in any Jira Cloud instance following a 5-field quality rule (Description, Acceptance Criteria, Estimated hours, Due date, Job Code). TRIGGER when the user wants to "Create Jira Tickets", "create a Jira ticket/story/task", "log a Jira issue", or "raise a ticket". Handles project-key lookup (client name to Epic), AC drafting, time estimate confirmation, and field-ID resolution.
 ---
 
 # Create Jira Tickets
 
-> **First use is fully automated** â€” Step 0 detects MCP connection, installs if needed, and auto-fills all configuration values. No manual setup required.
+> **First use is fully automated** — Step 0 detects MCP connection, installs if needed, and auto-fills all configuration values. No manual setup required.
 
 Linear 7-step workflow for creating a Jira ticket in your Jira Cloud instance. Enforces the 5-field rule (Description, Acceptance Criteria, Estimated hours, Due date, Job Code).
 
@@ -60,14 +60,14 @@ project = <YOUR_PROJECT_KEY> AND issuetype = Epic AND statusCategory != Done
 
 ---
 
-## Step 0 â€” First-run check (auto â€” skip if User Configuration is already filled in)
+## Step 0 — First-run check (auto — skip if User Configuration is already filled in)
 
 Run this step automatically on every invocation. Skip individual sub-steps that are already satisfied.
 
 ### 0a. Test MCP connection
 Try calling `getVisibleJiraProjects` or `atlassianUserInfo`.
-- **Success** â†’ proceed to 0b
-- **Failure (tool not found / connection error)** â†’ proceed to 0a-install
+- **Success** → proceed to 0b
+- **Failure (tool not found / connection error)** → proceed to 0a-install
 
 ### 0a-install. Install Atlassian MCP
 Ask the user: "Atlassian MCP is not connected. Would you like me to install it?"
@@ -83,39 +83,39 @@ Check the current MCP configuration URL (read from `.claude/settings.json` or eq
   - Inform user: "Your Atlassian MCP uses the old v1/sse endpoint, which stops working after June 30, 2026. Updating to v2."
   - Run: `claude mcp remove atlassian` then `claude mcp add atlassian -- npx -y @anthropic-ai/mcp-remote@latest https://mcp.atlassian.com/v1/mcp/authv2`
   - Tell user to restart Claude Code. **Stop**.
-- If already on `v1/mcp/authv2` â†’ continue
+- If already on `v1/mcp/authv2` → continue
 
 ### 0c. Auto-discover parameters (if any placeholder remains)
 If any `<YOUR_...>` placeholder still appears in the User Configuration table:
-1. Call `atlassianUserInfo` â†’ get `accountId` â†’ fill `JIRA_ACCOUNT_ID`
-2. Call `getAccessibleAtlassianResources` â†’ get `cloudId` and site URL â†’ fill `JIRA_CLOUD_ID` and `JIRA_SITE_URL`
+1. Call `atlassianUserInfo` → get `accountId` → fill `JIRA_ACCOUNT_ID`
+2. Call `getAccessibleAtlassianResources` → get `cloudId` and site URL → fill `JIRA_CLOUD_ID` and `JIRA_SITE_URL`
 3. Ask the user which project key to use (e.g. `KAN`)
 4. Call `getJiraProjectIssueTypesMetadata` to find Story issue type ID (do NOT assume defaults)
-5. Call `getJiraIssueTypeMetaWithFields` â†’ search for:
-   - "Acceptance Criteria" â†’ fill `AC_CUSTOM_FIELD`
-   - "Epic Link" â†’ fill `EPIC_LINK_FIELD`
-   - "Sprint" â†’ fill `SPRINT_FIELD`
+5. Call `getJiraIssueTypeMetaWithFields` → search for:
+   - "Acceptance Criteria" → fill `AC_CUSTOM_FIELD`
+   - "Epic Link" → fill `EPIC_LINK_FIELD`
+   - "Sprint" → fill `SPRINT_FIELD`
 6. Present all discovered values to the user for confirmation
 7. Write values into the User Configuration table above (replace placeholders)
 8. If a field is not found (e.g. no AC custom field), note it and skip in subsequent steps
 
 ### 0d. Verify end-to-end
 Run a test query: `assignee = currentUser() ORDER BY created DESC` (limit 1).
-- **Success** â†’ "Setup verified. Proceeding to create ticket."
-- **Failure** â†’ display error, suggest checking MCP connection or Jira permissions
+- **Success** → "Setup verified. Proceeding to create ticket."
+- **Failure** → display error, suggest checking MCP connection or Jira permissions
 
 ---
 
-## Step 1 â€” Get context
+## Step 1 — Get context
 
-**If the user attached an image** (Teams chat screenshot, email screenshot, etc.) â†’ read it as visual input. Extract: requester name, what's being asked, urgency cues ("when you have capacity" = no deadline; "by Friday" = explicit due date).
+**If the user attached an image** (Teams chat screenshot, email screenshot, etc.) → read it as visual input. Extract: requester name, what's being asked, urgency cues ("when you have capacity" = no deadline; "by Friday" = explicit due date).
 
-**Always ask these in Step 1 (regardless of whether an image was provided)** â€” these have no safe default:
-- **Sprint** â€” `Current sprint` / `Backlog` / `<specific sprint name>`?
-- **Assignee** â€” self or a specific person's name?
-- **Reporter** â€” self or a specific person's name? (often the requester from the screenshot/email)
+**Always ask these in Step 1 (regardless of whether an image was provided)** — these have no safe default:
+- **Sprint** — `Current sprint` / `Backlog` / `<specific sprint name>`?
+- **Assignee** — self or a specific person's name?
+- **Reporter** — self or a specific person's name? (often the requester from the screenshot/email)
 
-**If no image and no inline context** â†’ also ask:
+**If no image and no inline context** → also ask:
 - Which client / project?
 - What's the work?
 - Any deadline?
@@ -127,18 +127,18 @@ Batch all open questions into a single `AskUserQuestion` call. Don't proceed unt
 
 ---
 
-## Step 2 â€” Parse & auto-fill (single review table)
+## Step 2 — Parse & auto-fill (single review table)
 
 Resolve project key + Job Code from context (use the Mappings table above, or search live). Draft all fields and present in one table for user review:
 
 | # | Field | Auto-filled value | Notes |
 |---|---|---|---|
-| 1 | **Description** | `<inferred from context, include requester quote if from image>` | markdown ok |
+| 1 | **Description** | `<inferred from context, include requester quote if from image>` | rendered as ADF |
 | 2 | **Acceptance Criteria** | `<4-6 bullet draft>` covering: deliverable, data correctness, styling/UX consistency, stakeholder sign-off | best-effort draft |
 | 3 | **Estimated hours** | `<inferred from scope, or [TBD]>` | format: `2h`, `30m`, `1d`, `1w` |
 | 4 | **Due date** | `<YYYY-MM-DD or "None">` | omit if user said "when you have capacity" |
 | 5 | **Job Code (Epic)** | `<PROJ-NNN> <Client>` | from Mappings table or JQL search |
-| 6 | **Sprint** | `<from Step 1 answer>` | Backlog / Current sprint / specific name â€” never auto-default |
+| 6 | **Sprint** | `<from Step 1 answer>` | Backlog / Current sprint / specific name — never auto-default |
 | 7 | **Assignee** | `<from Step 1 answer>` | self or named person |
 | 8 | **Reporter** | `<from Step 1 answer>` | self or named person (often requester) |
 
@@ -147,25 +147,25 @@ Also auto-fill these defaults (don't ask):
 - Summary: `<Client> - <action> <noun>` (e.g. "Acme - Add Dashboard Filter to Monthly Report")
 - Priority: `Undefined` (default)
 
-Mark uncertain values with `[TBD]`. Then ask user to confirm or edit. **Do not invent** missing values â€” surface them as `[TBD]`.
+Mark uncertain values with `[TBD]`. Then ask user to confirm or edit. **Do not invent** missing values — surface them as `[TBD]`.
 
-**IMPORTANT â€” AC must be shown in full:** The review table only summarizes AC as a count (e.g. "10 æ¡"). You MUST also list every AC bullet below the table so the user can review the exact wording before creation. Never hide AC behind a count â€” always show the complete list.
-
----
-
-## Step 3 â€” Plan-mode preview
-
-If currently in plan mode â†’ write the draft (Step 2 table + summary + issue type) to the plan file, then `ExitPlanMode` for approval.
-
-If NOT in plan mode â†’ just print the table, the full AC list, and wait for the user to say "go" or send edits.
+**IMPORTANT — AC must be shown in full:** The review table only summarizes AC as a count (e.g. "10 items"). You MUST also list every AC bullet below the table so the user can review the exact wording before creation. Never hide AC behind a count — always show the complete list.
 
 ---
 
-## Step 4 â€” Create
+## Step 3 — Plan-mode preview
+
+If currently in plan mode → write the draft (Step 2 table + summary + issue type) to the plan file, then `ExitPlanMode` for approval.
+
+If NOT in plan mode → just print the table, the full AC list, and wait for the user to say "go" or send edits.
+
+---
+
+## Step 4 — Create
 
 Once user confirms:
 
-1. **Always run field discovery first** â€” call `getJiraIssueTypeMetaWithFields(cloudId=JIRA_CLOUD_ID, projectIdOrKey, issueTypeId)` to detect which fields are available on this project's screen. Different projects (Classic vs Team-managed) expose different fields. Also use `getJiraProjectIssueTypesMetadata` to find the correct issue type IDs â€” do NOT assume defaults (e.g. Story may be `10001` in one instance but `10009` in another).
+1. **Always run field discovery first** — call `getJiraIssueTypeMetaWithFields(cloudId=JIRA_CLOUD_ID, projectIdOrKey, issueTypeId)` to detect which fields are available on this project's screen. Different projects (Classic vs Team-managed) expose different fields. Also use `getJiraProjectIssueTypesMetadata` to find the correct issue type IDs — do NOT assume defaults (e.g. Story may be `10001` in one instance but `10009` in another).
 
 2. **Call `createJiraIssue`** with ADF-formatted description (see Description Format Rules below):
 
@@ -174,13 +174,13 @@ cloudId: "<JIRA_CLOUD_ID>"
 projectKey: "<project key>"
 issueTypeName: "Story"
 summary: "<concise summary>"
-description: <ADF document â€” see Description Format Rules>
+description: <ADF document — see Description Format Rules>
 contentFormat: "adf"
 assignee_account_id: "<JIRA_ACCOUNT_ID>"
 additional_fields: {
-  "<EPIC_LINK_FIELD>": "<PROJ-NNN>",       // Epic Link (Job Code) â€” for Classic projects
+  "<EPIC_LINK_FIELD>": "<PROJ-NNN>",       // Epic Link (Job Code) — for Classic projects
   // OR use top-level "parent": "<PROJ-NNN>" for Team-managed projects
-  "<AC_CUSTOM_FIELD>": {                    // Acceptance Criteria (ADF doc) â€” try taskList first, fallback to bulletList
+  "<AC_CUSTOM_FIELD>": {                    // Acceptance Criteria (ADF doc) — try taskList first, fallback to bulletList
     "type": "doc", "version": 1,
     "content": [{
       "type": "taskList", "attrs": {"localId": "<uuid>"},
@@ -192,13 +192,13 @@ additional_fields: {
   "timetracking": { "originalEstimate": "2h" },
   "duedate": "2026-05-30",                 // only if exists, else omit
   "reporter": { "accountId": "<reporter_account_id>" }  // only if Reporter != default; resolve via lookupJiraAccountId
-  // "<SPRINT_FIELD>": <sprintId>           // only if user opted into a non-Backlog Sprint â€” pass as a NUMBER, not an array
+  // "<SPRINT_FIELD>": <sprintId>           // only if user opted into a non-Backlog Sprint — pass as a NUMBER, not an array
 }
 ```
 
-3. **Time Tracking is mandatory** â€” Always include `"timetracking": {"originalEstimate": "<estimate>"}` in `additional_fields`. If `createJiraIssue` rejects the field (some project screens don't expose it at creation time), **immediately** follow up with `editJiraIssue` to set it. Never skip time tracking.
+3. **Time Tracking is mandatory** — Always include `"timetracking": {"originalEstimate": "<estimate>"}` in `additional_fields`. If `createJiraIssue` rejects the field (some project screens don't expose it at creation time), **immediately** follow up with `editJiraIssue` to set it. Never skip time tracking.
 
-4. **Field fallback strategy** â€” If `createJiraIssue` rejects any field (AC, Epic Link, timetracking, etc.), do NOT abandon that field. Instead:
+4. **Field fallback strategy** — If `createJiraIssue` rejects any field (AC, Epic Link, timetracking, etc.), do NOT abandon that field. Instead:
    - Try setting it via `editJiraIssue` after creation
    - For AC: if no custom field exists, include AC content in the Description body
    - For Epic Link: use `parent` field for Team-managed projects instead of `EPIC_LINK_FIELD`
@@ -207,7 +207,7 @@ additional_fields: {
 ```jql
 project = <KEY> AND sprint in openSprints()
 ```
-Take any returned issue's sprint field `[0].id` â†’ use as the new sprint ID. (Alternatively read board state.)
+Take any returned issue's sprint field `[0].id` → use as the new sprint ID. (Alternatively read board state.)
 
 ---
 
@@ -217,19 +217,19 @@ Take any returned issue's sprint field `[0].id` â†’ use as the new sprint I
 
 Every Description MUST follow this structure using ADF nodes:
 
-1. **Source Reference** (info panel) â€” Who requested it, when, where, and original request quote:
+1. **Source Reference** (info panel) — Who requested it, when, where, and original request quote:
    - `Requester:` name and role/relationship
    - `Date:` YYYY-MM-DD
    - `Source:` where the request came from (Teams chat, email, screenshot, meeting, etc.)
    - `Original Request:` exact quote or paraphrase in quotes
 
-2. **Background** (paragraph) â€” 1-2 sentence explaining WHY this work is needed (motivation, pain point). Do NOT describe deliverables here â€” that belongs in Scope.
+2. **Background** (paragraph) — 1-2 sentence explaining WHY this work is needed (motivation, pain point). Do NOT describe deliverables here — that belongs in Scope.
 
-3. **Scope** (ordered list) â€” Each deliverable as a numbered list item: `**Feature name** â€” description`. Use `orderedList`/`listItem` ADF nodes with bold text for the feature name followed by an em dash and description.
+3. **Scope** (ordered list) — Each deliverable as a numbered list item: `**Feature name** — description`. Use `orderedList`/`listItem` ADF nodes with bold text for the feature name followed by an em dash and description.
 
-4. **Acceptance Criteria** (task list) â€” Use `taskList`/`taskItem` ADF nodes to render as checkable checkboxes. If the MCP tool rejects `taskList`/`taskItem` with `INVALID_INPUT`, automatically fallback to `bulletList`/`listItem` and inform the user they can convert to checkboxes in Jira UI (select list â†’ click â˜‘ toolbar button).
+4. **Acceptance Criteria** (task list) — Use `taskList`/`taskItem` ADF nodes to render as checkable checkboxes. If the MCP tool rejects `taskList`/`taskItem` with `INVALID_INPUT`, automatically fallback to `bulletList`/`listItem` and inform the user they can convert to checkboxes in Jira UI (select list → click ☑ toolbar button).
 
-5. **Estimate** (paragraph) â€” `Original Estimate: <value>`
+5. **Estimate** (paragraph) — `Original Estimate: <value>`
 
 ADF skeleton:
 ```json
@@ -242,7 +242,7 @@ ADF skeleton:
     { "type": "paragraph", "content": [/* ... */] },
     { "type": "rule" },
     { "type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Scope"}] },
-    { "type": "orderedList", "content": [/* listItem: bold feature â€” description */] },
+    { "type": "orderedList", "content": [/* listItem: bold feature — description */] },
     { "type": "rule" },
     { "type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Acceptance Criteria"}] },
     { "type": "taskList", "attrs": {"localId": "<uuid>"}, "content": [/* taskItem nodes with state="TODO" */] },
@@ -255,7 +255,7 @@ ADF skeleton:
 
 ---
 
-## Step 5 â€” Verify (8-row table)
+## Step 5 — Verify (8-row table)
 
 Read back via `getJiraIssue` with explicit `fields` list. Present:
 
@@ -274,27 +274,26 @@ Return: ticket key + browse URL `https://<JIRA_SITE_URL>/browse/<KEY>`.
 
 ---
 
-## Step 6 â€” Follow-up offers
+## Step 6 — Follow-up offers
 
 Proactively offer (don't execute without "yes"):
 
-- **Pull into current sprint** â€” set sprint field via edit
-- **Transition to In Progress** â€” look up available transitions via `getTransitionsForJiraIssue` and walk forward through the workflow (some instances require multiple hops, e.g. Backlog â†’ Next â†’ In Progress). Cap at 2 hops.
-- **Add comment** â€” e.g. `@<requester>` confirming receipt
+- **Pull into current sprint** — set sprint field via edit
+- **Transition to In Progress** — look up available transitions via `getTransitionsForJiraIssue` and walk forward through the workflow (some instances require multiple hops, e.g. Backlog → Next → In Progress). Cap at 2 hops.
+- **Add comment** — e.g. `@<requester>` confirming receipt
 
 ---
 
 ## Pitfalls
 
-- Do not confuse project name prefixes with project keys â€” always verify the actual JQL key (e.g. a project called "Data Analytics" might have key `DA`, not `DATA`).
+- Do not confuse project name prefixes with project keys — always verify the actual JQL key (e.g. a project called "Data Analytics" might have key `DA`, not `DATA`).
 - For Classic Jira projects, use the Epic Link custom field (`EPIC_LINK_FIELD`) for Job Code, NOT the top-level `parent` field. The `parent` field auto-populates server-side.
-- For Team-managed (next-gen) projects, use the `parent` field instead of `EPIC_LINK_FIELD` â€” the custom field may not exist on the screen.
-- **`parent` å­—æ®µå¿…é¡»é€šè¿‡ `additional_fields` ä¼ é€’ï¼Œä¸èƒ½ç”¨é¡¶å±‚å‚æ•°ã€‚** `createJiraIssue` çš„é¡¶å±‚ `parent` å‚æ•°ä»…é€‚ç”¨äºŽ Subtask ç±»åž‹ã€‚Story/Task å…³è” Epic æ—¶ï¼Œå¿…é¡»åœ¨ `additional_fields` ä¸­ä»¥å¯¹è±¡æ ¼å¼ä¼ é€’ï¼š`{"parent": {"key": "KAN-4"}}`ï¼Œè€Œéžé¡¶å±‚ `parent: "KAN-4"`ã€‚é”™è¯¯ç”¨æ³•ä¼šå¯¼è‡´ `INVALID_INPUT`ã€‚
+- For Team-managed (next-gen) projects, use the `parent` field instead of `EPIC_LINK_FIELD` — the custom field may not exist on the screen.
+- **The `parent` field must be passed via `additional_fields`, not as a top-level parameter.** The top-level `parent` parameter in `createJiraIssue` only works for Subtask types. To link a Story/Task to an Epic, pass it as an object in `additional_fields`: `{"parent": {"key": "PROJ-100"}}`, NOT as top-level `parent: "PROJ-100"`. Using the wrong approach causes `INVALID_INPUT`.
 - Pass the Sprint field as a single number, NOT an array. Use `8564` not `[8564]`.
-- Never invent values for missing fields â€” if you can't infer, mark `[TBD]` and ask the user.
+- Never invent values for missing fields — if you can't infer, mark `[TBD]` and ask the user.
 - **Never use `contentFormat: "markdown"` with escaped `\n` strings.** Jira renders them as literal `\n` text, destroying readability. Always use `contentFormat: "adf"` with a proper ADF JSON document.
 - **Issue type IDs are not universal.** Story could be `10001` in one instance and `10009` in another. Always discover via `getJiraProjectIssueTypesMetadata` before calling `getJiraIssueTypeMetaWithFields`.
 - **Custom field IDs vary across projects** even within the same Jira instance. The User Configuration field IDs (AC, Epic Link, Sprint) may only work for specific projects. Always run field discovery (`getJiraIssueTypeMetaWithFields`) for new/unfamiliar projects.
-- **Time tracking must not be skipped.** If `createJiraIssue` rejects `timetracking`, immediately use `editJiraIssue` to set it. The estimate is one of the 5 required fields â€” it must exist in Jira's time tracking, not just in the Description text.
-- **taskList/taskItem ADF nodes may be rejected** by the Atlassian MCP tool with `INVALID_INPUT`. Always try `taskList`/`taskItem` first for checkbox-style AC. If rejected, automatically fallback to `bulletList`/`listItem` and inform the user to convert in Jira UI (select list â†’ click â˜‘ toolbar button).
-
+- **Time tracking must not be skipped.** If `createJiraIssue` rejects `timetracking`, immediately use `editJiraIssue` to set it. The estimate is one of the 5 required fields — it must exist in Jira's time tracking, not just in the Description text.
+- **taskList/taskItem ADF nodes may be rejected** by the Atlassian MCP tool with `INVALID_INPUT`. Always try `taskList`/`taskItem` first for checkbox-style AC. If rejected, automatically fallback to `bulletList`/`listItem` and inform the user to convert in Jira UI (select list → click ☑ toolbar button).
