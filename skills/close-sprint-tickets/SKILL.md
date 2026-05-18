@@ -28,6 +28,7 @@ Linear 8-step workflow for closing out all your tickets (any issue type) in the 
 ## Deferred MCP tools
 
 Load up-front via `ToolSearch select:<names>`:
+
 - `mcp__atlassian__searchJiraIssuesUsingJql`
 - `mcp__atlassian__getJiraIssue`
 - `mcp__atlassian__getTransitionsForJiraIssue`
@@ -41,20 +42,27 @@ Load up-front via `ToolSearch select:<names>`:
 Run this step automatically on every invocation. Skip individual sub-steps that are already satisfied.
 
 ### 0a. Test MCP connection
+
 Try calling `getVisibleJiraProjects` or `atlassianUserInfo`.
+
 - **Success** → proceed to 0b
 - **Failure (tool not found / connection error)** → proceed to 0a-install
 
 ### 0a-install. Install Atlassian MCP
+
 Ask the user: "Atlassian MCP is not connected. Would you like me to install it?"
 On confirmation, run:
+
 ```bash
 claude mcp add atlassian -- npx -y @anthropic-ai/mcp-remote@latest https://mcp.atlassian.com/v1/mcp/authv2
 ```
+
 Tell the user: **"MCP has been added. Please restart Claude Code and re-run this skill."** Then **stop**.
 
 ### 0b. Verify MCP endpoint version
+
 Check the current MCP configuration URL (read from `.claude/settings.json` or equivalent).
+
 - If URL is the deprecated `https://mcp.atlassian.com/v1/sse`:
   - Inform user: "Your Atlassian MCP uses the old v1/sse endpoint, which stops working after June 30, 2026. Updating to v2."
   - Run: `claude mcp remove atlassian` then `claude mcp add atlassian -- npx -y @anthropic-ai/mcp-remote@latest https://mcp.atlassian.com/v1/mcp/authv2`
@@ -62,14 +70,18 @@ Check the current MCP configuration URL (read from `.claude/settings.json` or eq
 - If already on `v1/mcp/authv2` → continue
 
 ### 0c. Auto-discover parameters (if any placeholder remains)
+
 If any `<YOUR_...>` placeholder still appears in the User Configuration table:
+
 1. Call `atlassianUserInfo` → get `accountId` → fill `JIRA_ACCOUNT_ID`
 2. Call `getAccessibleAtlassianResources` → get `cloudId` and site URL → fill `JIRA_CLOUD_ID` and `JIRA_SITE_URL`
 3. Present all discovered values to the user for confirmation
 4. Write values into the User Configuration table above (replace placeholders)
 
 ### 0d. Verify end-to-end
+
 Run a test query: `assignee = currentUser() ORDER BY created DESC` (limit 1).
+
 - **Success** → "Setup verified. Proceeding."
 - **Failure** → display error, suggest checking MCP connection or Jira permissions
 
@@ -126,6 +138,7 @@ Single free-text prompt to the user:
 > "Which item numbers should be marked **Done**? (e.g. `1,3,5` or `all` or `none`)"
 
 Parse:
+
 - `all` → `done_set` = all items, `remaining_set` = []
 - `none` → `done_set` = [], `remaining_set` = all items
 - comma list (e.g. `1,3,5`) → split, validate each is within the displayed range, error out and re-ask on invalid input

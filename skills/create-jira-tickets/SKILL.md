@@ -31,6 +31,7 @@ Linear 7-step workflow for creating a Jira ticket in your Jira Cloud instance. E
 ## Deferred MCP tools
 
 Load up-front via `ToolSearch select:<names>`:
+
 - `mcp__atlassian__createJiraIssue`
 - `mcp__atlassian__getJiraIssue`
 - `mcp__atlassian__searchJiraIssuesUsingJql`
@@ -49,11 +50,13 @@ Edit this table to match your projects and clients. The left side maps project n
 | _Example Project_ | `PROJ` | | _Apple_ | `PROJ-100` |
 
 If a client/project is not in this table, search live:
+
 ```jql
 project = <KEY> AND issuetype = Epic AND statusCategory != Done AND text ~ "<client>"
 ```
 
 To populate this table, ask Claude to run:
+
 ```jql
 project = <YOUR_PROJECT_KEY> AND issuetype = Epic AND statusCategory != Done
 ```
@@ -65,20 +68,27 @@ project = <YOUR_PROJECT_KEY> AND issuetype = Epic AND statusCategory != Done
 Run this step automatically on every invocation. Skip individual sub-steps that are already satisfied.
 
 ### 0a. Test MCP connection
+
 Try calling `getVisibleJiraProjects` or `atlassianUserInfo`.
+
 - **Success** → proceed to 0b
 - **Failure (tool not found / connection error)** → proceed to 0a-install
 
 ### 0a-install. Install Atlassian MCP
+
 Ask the user: "Atlassian MCP is not connected. Would you like me to install it?"
 On confirmation, run:
+
 ```bash
 claude mcp add atlassian -- npx -y @anthropic-ai/mcp-remote@latest https://mcp.atlassian.com/v1/mcp/authv2
 ```
+
 Tell the user: **"MCP has been added. Please restart Claude Code and re-run this skill."** Then **stop**.
 
 ### 0b. Verify MCP endpoint version
+
 Check the current MCP configuration URL (read from `.claude/settings.json` or equivalent).
+
 - If URL is the deprecated `https://mcp.atlassian.com/v1/sse`:
   - Inform user: "Your Atlassian MCP uses the old v1/sse endpoint, which stops working after June 30, 2026. Updating to v2."
   - Run: `claude mcp remove atlassian` then `claude mcp add atlassian -- npx -y @anthropic-ai/mcp-remote@latest https://mcp.atlassian.com/v1/mcp/authv2`
@@ -86,7 +96,9 @@ Check the current MCP configuration URL (read from `.claude/settings.json` or eq
 - If already on `v1/mcp/authv2` → continue
 
 ### 0c. Auto-discover parameters (if any placeholder remains)
+
 If any `<YOUR_...>` placeholder still appears in the User Configuration table:
+
 1. Call `atlassianUserInfo` → get `accountId` → fill `JIRA_ACCOUNT_ID`
 2. Call `getAccessibleAtlassianResources` → get `cloudId` and site URL → fill `JIRA_CLOUD_ID` and `JIRA_SITE_URL`
 3. Ask the user which project key to use (e.g. `KAN`)
@@ -100,7 +112,9 @@ If any `<YOUR_...>` placeholder still appears in the User Configuration table:
 8. If a field is not found (e.g. no AC custom field), note it and skip in subsequent steps
 
 ### 0d. Verify end-to-end
+
 Run a test query: `assignee = currentUser() ORDER BY created DESC` (limit 1).
+
 - **Success** → "Setup verified. Proceeding to create ticket."
 - **Failure** → display error, suggest checking MCP connection or Jira permissions
 
@@ -111,11 +125,13 @@ Run a test query: `assignee = currentUser() ORDER BY created DESC` (limit 1).
 **If the user attached an image** (Teams chat screenshot, email screenshot, etc.) → read it as visual input. Extract: requester name, what's being asked, urgency cues ("when you have capacity" = no deadline; "by Friday" = explicit due date).
 
 **Always ask these in Step 1 (regardless of whether an image was provided)** — these have no safe default:
+
 - **Sprint** — `Current sprint` / `Backlog` / `<specific sprint name>`?
 - **Assignee** — self or a specific person's name?
 - **Reporter** — self or a specific person's name? (often the requester from the screenshot/email)
 
 **If no image and no inline context** → also ask:
+
 - Which client / project?
 - What's the work?
 - Any deadline?
@@ -143,6 +159,7 @@ Resolve project key + Job Code from context (use the Mappings table above, or se
 | 8 | **Reporter** | `<from Step 1 answer>` | self or named person (often requester) |
 
 Also auto-fill these defaults (don't ask):
+
 - Issue type: `Story` (most common; switch to `Task` / `Bug` only if context demands)
 - Summary: `<Client> - <action> <noun>` (e.g. "Acme - Add Dashboard Filter to Monthly Report")
 - Priority: `Undefined` (default)
@@ -196,17 +213,19 @@ additional_fields: {
 }
 ```
 
-3. **Time Tracking is mandatory** — Always include `"timetracking": {"originalEstimate": "<estimate>"}` in `additional_fields`. If `createJiraIssue` rejects the field (some project screens don't expose it at creation time), **immediately** follow up with `editJiraIssue` to set it. Never skip time tracking.
+1. **Time Tracking is mandatory** — Always include `"timetracking": {"originalEstimate": "<estimate>"}` in `additional_fields`. If `createJiraIssue` rejects the field (some project screens don't expose it at creation time), **immediately** follow up with `editJiraIssue` to set it. Never skip time tracking.
 
-4. **Field fallback strategy** — If `createJiraIssue` rejects any field (AC, Epic Link, timetracking, etc.), do NOT abandon that field. Instead:
+2. **Field fallback strategy** — If `createJiraIssue` rejects any field (AC, Epic Link, timetracking, etc.), do NOT abandon that field. Instead:
    - Try setting it via `editJiraIssue` after creation
    - For AC: if no custom field exists, include AC content in the Description body
    - For Epic Link: use `parent` field for Team-managed projects instead of `EPIC_LINK_FIELD`
 
 **If user chose a Sprint** in Step 2 (not Backlog), look up the active sprint ID first:
+
 ```jql
 project = <KEY> AND sprint in openSprints()
 ```
+
 Take any returned issue's sprint field `[0].id` → use as the new sprint ID. (Alternatively read board state.)
 
 ---
@@ -232,6 +251,7 @@ Every Description MUST follow this structure using ADF nodes:
 5. **Estimate** (paragraph) — `Original Estimate: <value>`
 
 ADF skeleton:
+
 ```json
 {
   "type": "doc", "version": 1,

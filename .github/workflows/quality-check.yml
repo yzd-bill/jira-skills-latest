@@ -1,0 +1,100 @@
+name: Quality Check
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ['**/*.md']
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  lint-and-fix:
+    name: Lint, spell-check & auto-fix
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # --- Markdown lint with auto-fix ---
+      - name: Install markdownlint-cli2
+        run: npm install -g markdownlint-cli2
+
+      - name: Run markdownlint (auto-fix)
+        id: mdlint
+        run: markdownlint-cli2 --fix "**/*.md" || true
+
+      - name: Auto-commit markdown fixes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "style: auto-fix markdown formatting"
+          file_pattern: '*.md **/*.md'
+
+      # --- Spell check ---
+      - name: Install cspell
+        run: npm install -g cspell@latest
+
+      - name: Run spell check
+        run: cspell lint --no-progress --show-suggestions "**/*.md"
+
+      # --- Sensitive data check ---
+      - name: Check for leaked credentials
+        run: |
+          echo "Checking for real UUIDs (potential cloud/account IDs)..."
+          # Match UUIDs but exclude known safe patterns like <uuid>, <YOUR_*>, and ADF examples
+          LEAKS=$(grep -rn --include='*.md' \
+            -E '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' \
+            --exclude-dir=.github . || true)
+
+          if [ -n "$LEAKS" ]; then
+            echo "::error::Found UUID patterns that may be real credentials:"
+            echo "$LEAKS"
+            echo ""
+            echo "If these are intentional (e.g. ADF examples), add them to .github/sensitive-allowlist.txt"
+            exit 1
+          fi
+
+          echo "Checking for hardcoded Jira site URLs..."
+          SITES=$(grep -rn --include='*.md' \
+            -E '[a-zA-Z0-9-]+\.atlassian\.net' \
+            --exclude-dir=.github . || true)
+
+          if [ -n "$SITES" ]; then
+            echo "::error::Found hardcoded Atlassian site URLs:"
+            echo "$SITES"
+            exit 1
+          fi
+
+          echo "No sensitive data found."
+
+      # --- Encoding check ---
+      - name: Check UTF-8 encoding (no BOM)
+        run: |
+          echo "Checking for UTF-8 BOM markers..."
+          BOM_FILES=""
+          for f in $(find . -name '*.md' -not -path './.git/*'); do
+            if head -c 3 "$f" | grep -qP '\xef\xbb\xbf'; then
+              BOM_FILES="$BOM_FILES $f"
+            fi
+          done
+
+          if [ -n "$BOM_FILES" ]; then
+            echo "::error::Files with UTF-8 BOM found:$BOM_FILES"
+            echo "Removing BOM..."
+            for f in $BOM_FILES; do
+              sed -i '1s/^\xEF\xBB\xBF//' "$f"
+            done
+            exit 1
+          fi
+
+          echo "All files are clean UTF-8."

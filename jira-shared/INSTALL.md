@@ -41,10 +41,12 @@ If the URL is the deprecated `https://mcp.atlassian.com/v1/sse`:
 
 1. Inform the user: "Your Atlassian MCP uses the old v1/sse endpoint, which will stop working after June 30, 2026. Updating to v2."
 2. Run:
+
    ```bash
    claude mcp remove atlassian
    claude mcp add atlassian -- npx -y @anthropic-ai/mcp-remote@latest https://mcp.atlassian.com/v1/mcp/authv2
    ```
+
 3. Remind user to restart Claude Code.
 
 If already on v2 → continue.
