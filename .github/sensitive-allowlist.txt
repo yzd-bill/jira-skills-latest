@@ -4,3 +4,6 @@
 
 # Example Atlassian site URL used in documentation
 yoursite.atlassian.net
+
+# GitHub user-attachments asset UUIDs (image hosting, not credentials)
+github.com/user-attachments/assets
