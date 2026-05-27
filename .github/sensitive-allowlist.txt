@@ -1,0 +1,6 @@
+# Sensitive data allowlist
+# Lines listed here are known-safe patterns that should NOT trigger the sensitive data check.
+# Format: one pattern per line (plain text substring match)
+
+# Example Atlassian site URL used in documentation
+yoursite.atlassian.net

@@ -1,6 +1,9 @@
 name: Quality Check
 
 on:
+  push:
+    branches: [main]
+    paths: ['**/*.md']
   pull_request:
     branches: [main]
     paths: ['**/*.md']
@@ -15,10 +18,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout PR branch
+      - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref }}
+          ref: ${{ github.head_ref || github.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
@@ -35,6 +38,7 @@ jobs:
         run: markdownlint-cli2 --fix "**/*.md" || true
 
       - name: Auto-commit markdown fixes
+        if: github.event_name == 'pull_request'
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "style: auto-fix markdown formatting"
@@ -50,28 +54,73 @@ jobs:
       # --- Sensitive data check ---
       - name: Check for leaked credentials
         run: |
+          ALLOWLIST=".github/sensitive-allowlist.txt"
+
+          # Helper: filter out allowlisted lines
+          filter_allowed() {
+            if [ -f "$ALLOWLIST" ]; then
+              while IFS= read -r line; do
+                ALLOWED=false
+                while IFS= read -r pattern; do
+                  # Skip comments and empty lines
+                  [[ -z "$pattern" || "$pattern" == \#* ]] && continue
+                  if echo "$line" | grep -qF "$pattern"; then
+                    ALLOWED=true
+                    break
+                  fi
+                done < "$ALLOWLIST"
+                if [ "$ALLOWED" = false ]; then
+                  echo "$line"
+                fi
+              done
+            else
+              cat
+            fi
+          }
+
           echo "Checking for real UUIDs (potential cloud/account IDs)..."
-          # Match UUIDs but exclude known safe patterns like <uuid>, <YOUR_*>, and ADF examples
           LEAKS=$(grep -rn --include='*.md' \
             -E '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' \
-            --exclude-dir=.github . || true)
+            --exclude-dir=.github . | filter_allowed || true)
 
           if [ -n "$LEAKS" ]; then
             echo "::error::Found UUID patterns that may be real credentials:"
             echo "$LEAKS"
             echo ""
-            echo "If these are intentional (e.g. ADF examples), add them to .github/sensitive-allowlist.txt"
+            echo "If these are intentional, add them to .github/sensitive-allowlist.txt"
             exit 1
           fi
 
           echo "Checking for hardcoded Jira site URLs..."
           SITES=$(grep -rn --include='*.md' \
             -E '[a-zA-Z0-9-]+\.atlassian\.net' \
-            --exclude-dir=.github . || true)
+            --exclude-dir=.github . | filter_allowed || true)
 
           if [ -n "$SITES" ]; then
             echo "::error::Found hardcoded Atlassian site URLs:"
             echo "$SITES"
+            exit 1
+          fi
+
+          echo "Checking for hardcoded email addresses..."
+          EMAILS=$(grep -rn --include='*.md' \
+            -E '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}' \
+            --exclude-dir=.github . | filter_allowed || true)
+
+          if [ -n "$EMAILS" ]; then
+            echo "::error::Found hardcoded email addresses:"
+            echo "$EMAILS"
+            exit 1
+          fi
+
+          echo "Checking for API tokens or keys..."
+          TOKENS=$(grep -rn --include='*.md' \
+            -E '(ATATT|xox[bpas]-|sk-[a-zA-Z0-9]{20,}|ghp_[a-zA-Z0-9]{36}|gho_[a-zA-Z0-9]{36})' \
+            --exclude-dir=.github . | filter_allowed || true)
+
+          if [ -n "$TOKENS" ]; then
+            echo "::error::Found potential API tokens or keys:"
+            echo "$TOKENS"
             exit 1
           fi
 
