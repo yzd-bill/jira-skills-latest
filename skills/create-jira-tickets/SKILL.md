@@ -15,7 +15,7 @@ Linear 7-step workflow for creating a Jira ticket in your Jira Cloud instance. E
 
 ## User Configuration
 
-> Auto-filled by Step 0 on first run. Manual editing only needed for troubleshooting. See `../jira-shared/INSTALL.md` for details.
+> Auto-filled by Step 0 on first run. Manual editing only needed for troubleshooting. See `../../INSTALL.md` for details.
 
 | Setting | Value | Auto-discovered via |
 |---|---|---|
