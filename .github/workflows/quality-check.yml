@@ -50,7 +50,7 @@ jobs:
         run: npm install -g cspell@latest
 
       - name: Run spell check
-        run: cspell lint --no-progress --show-suggestions "**/*.md"
+        run: cspell lint --config cspell.json --no-progress --show-suggestions "**/*.md"
 
       # --- Sensitive data check ---
       - name: Check for leaked credentials
