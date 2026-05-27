@@ -22,7 +22,7 @@ Linear 7-step workflow for creating a Jira ticket in your Jira Cloud instance. E
 | `JIRA_CLOUD_ID` | `<YOUR_CLOUD_ID>` | `getAccessibleAtlassianResources` |
 | `JIRA_SITE_URL` | `<YOUR_SITE_URL>` | `getAccessibleAtlassianResources` |
 | `JIRA_ACCOUNT_ID` | `<YOUR_ACCOUNT_ID>` | `atlassianUserInfo` |
-| `AC_CUSTOM_FIELD` | `<YOUR_AC_FIELD>` | `getJiraIssueTypeMetaWithFields` |
+| `AC_CUSTOM_FIELD` | `<YOUR_AC_FIELD>` | `getJiraIssueTypeMetaWithFields` (record only — AC is written in the Description, this field is left empty) |
 | `EPIC_LINK_FIELD` | `<YOUR_EPIC_LINK_FIELD>` | `getJiraIssueTypeMetaWithFields` |
 | `SPRINT_FIELD` | `<YOUR_SPRINT_FIELD>` | `getJiraIssueTypeMetaWithFields` |
 
@@ -112,7 +112,7 @@ If any `<YOUR_...>` placeholder still appears in the User Configuration table:
 3. Ask the user which project key to use (e.g. `KAN`)
 4. Call `getJiraProjectIssueTypesMetadata` to find Story issue type ID (do NOT assume defaults)
 5. Call `getJiraIssueTypeMetaWithFields` → search for:
-   - "Acceptance Criteria" → fill `AC_CUSTOM_FIELD`
+   - "Acceptance Criteria" → fill `AC_CUSTOM_FIELD` (recorded only so it can be deliberately LEFT EMPTY — AC is written in the Description body, never in this field)
    - "Epic Link" → fill `EPIC_LINK_FIELD`
    - "Sprint" → fill `SPRINT_FIELD`
 6. Present all discovered values to the user for confirmation
@@ -272,15 +272,10 @@ assignee_account_id: "<JIRA_ACCOUNT_ID>"
 additional_fields: {
   "<EPIC_LINK_FIELD>": "<PROJ-NNN>",       // Epic Link (Job Code) — for Classic projects
   // OR use top-level "parent": "<PROJ-NNN>" for Team-managed projects
-  "<AC_CUSTOM_FIELD>": {                    // Acceptance Criteria (ADF doc) — try taskList first, fallback to bulletList
-    "type": "doc", "version": 1,
-    "content": [{
-      "type": "taskList", "attrs": {"localId": "<uuid>"},
-      "content": [
-        { "type": "taskItem", "attrs": {"localId": "<uuid>", "state": "TODO"}, "content": [{ "type": "text", "text": "<AC item>" }]}
-      ]
-    }]
-  },
+  // NOTE: Do NOT set the AC custom field (<AC_CUSTOM_FIELD>). Acceptance Criteria
+  //       lives ONLY in the Description body (see the Acceptance Criteria section
+  //       of the ADF document). Writing it here as well produces a duplicate AC
+  //       block on projects that expose a dedicated AC field on their screen.
   "timetracking": { "originalEstimate": "2h" },
   "duedate": "<YYYY-MM-DD>",                // only if exists, else omit
   "reporter": { "accountId": "<reporter_account_id>" }  // only if Reporter != default; resolve via lookupJiraAccountId
@@ -290,10 +285,10 @@ additional_fields: {
 
 1. **Time Tracking is mandatory** — Always include `"timetracking": {"originalEstimate": "<estimate>"}` in `additional_fields`. If `createJiraIssue` rejects the field (some project screens don't expose it at creation time), **immediately** follow up with `editJiraIssue` to set it. Never skip time tracking.
 
-2. **Field fallback strategy** — If `createJiraIssue` rejects any field (AC, Epic Link, timetracking, etc.), do NOT abandon that field. Instead:
+2. **Field fallback strategy** — If `createJiraIssue` rejects any field (Epic Link, timetracking, etc.), do NOT abandon that field. Instead:
    - Try setting it via `editJiraIssue` after creation
-   - For AC: if no custom field exists, include AC content in the Description body
    - For Epic Link: use `parent` field for Team-managed projects instead of `EPIC_LINK_FIELD`
+   - **Acceptance Criteria** is intentionally NOT written to a custom field — it lives only in the Description body. If the project has a dedicated AC custom field on its screen, leave it empty (do not populate it), so AC is not duplicated.
 
 **If user chose a Sprint** in Step 2 (not Backlog), look up the active sprint ID first:
 
