@@ -28,15 +28,16 @@ There are two ways to connect Claude Code to your Atlassian instance. Pick one �
 ### 1.1. Open the Claude Code Directory
 
 In the Claude Code Desktop App or IDE extension, open the **Directory** panel:
+<img width="1240" height="191" alt="image" src="https://github.com/user-attachments/assets/9dfc265b-204e-46e6-92e8-bb92afec74bc" />
 
-- **Desktop App**: Click the Directory icon in the sidebar (or use the menu)
-- **IDE extension**: Open the Claude Code panel → click Directory
+- **Desktop App**: Click the + button at the bottom of the UI, Add connectors
 
 ### 1.2. Search for the Atlassian connector
 
-1. In the Directory, click the **Connectors** tab on the left sidebar
-2. Type **`jira`** in the search bar
-3. You will see **Atlassian Rovo** — "Access Jira & Confluence from Claude"
+1. Type **`jira`** in the search bar
+2. You will see **Atlassian Rovo** — "Access Jira & Confluence from Claude"
+<img width="784" height="725" alt="image" src="https://github.com/user-attachments/assets/82daf6e6-b73c-48c6-aad8-001be86e1b5e" />
+
 
 ### 1.3. Install the connector
 
