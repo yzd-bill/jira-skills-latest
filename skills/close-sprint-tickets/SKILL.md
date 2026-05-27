@@ -54,7 +54,7 @@ Ask the user: "Atlassian MCP is not connected. Would you like me to install it?"
 On confirmation, run:
 
 ```bash
-claude mcp add atlassian -- npx -y @anthropic-ai/mcp-remote@latest https://mcp.atlassian.com/v1/mcp/authv2
+claude mcp add atlassian -- npx -y mcp-remote@latest https://mcp.atlassian.com/v1/mcp/authv2
 ```
 
 Tell the user: **"MCP has been added. Please restart Claude Code and re-run this skill."** Then **stop**.
@@ -65,7 +65,7 @@ Check the current MCP configuration URL (read from `.claude/settings.json` or eq
 
 - If URL is the deprecated `https://mcp.atlassian.com/v1/sse`:
   - Inform user: "Your Atlassian MCP uses the old v1/sse endpoint, which stops working after June 30, 2026. Updating to v2."
-  - Run: `claude mcp remove atlassian` then `claude mcp add atlassian -- npx -y @anthropic-ai/mcp-remote@latest https://mcp.atlassian.com/v1/mcp/authv2`
+  - Run: `claude mcp remove atlassian` then `claude mcp add atlassian -- npx -y mcp-remote@latest https://mcp.atlassian.com/v1/mcp/authv2`
   - Tell user to restart Claude Code. **Stop**.
 - If already on `v1/mcp/authv2` → continue
 

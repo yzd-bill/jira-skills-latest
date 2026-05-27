@@ -9,7 +9,7 @@ description: Create Jira tickets in any Jira Cloud instance following a 5-field 
 
 Linear 7-step workflow for creating a Jira ticket in your Jira Cloud instance. Enforces the 5-field rule (Description, Acceptance Criteria, Estimated hours, Due date, Job Code).
 
-**Invocation phrase**: "Create Jira Tickets" or "CJT" (or natural variants: "create a Jira ticket", "raise a ticket", "log this in Jira").
+**Invocation phrase**: "Create Jira Tickets" (or natural variants: "create a Jira ticket", "raise a ticket", "log this in Jira").
 
 ---
 
@@ -41,25 +41,33 @@ Load up-front via `ToolSearch select:<names>`:
 
 ---
 
-## Mappings
+## Dynamic Lookup
 
-Edit this table to match your projects and clients. The left side maps project names to JQL keys; the right side maps client shorthand names to their parent Epic (Job Code).
+All project, Epic, and Sprint selection is done via live Jira queries — no hardcoded mappings. This ensures the skill works for any user on any Jira instance without manual configuration.
 
-| Project Name | JQL Key |  | Client shorthand | Epic Key |
-|---|---|---|---|---|
-| _Example Project_ | `PROJ` | | _Apple_ | `PROJ-100` |
+### Projects
 
-If a client/project is not in this table, search live:
+Call `getVisibleJiraProjects(cloudId)` → return the full list of projects the user can create issues in. Present as a numbered list for the user to pick from.
 
-```jql
-project = <KEY> AND issuetype = Epic AND statusCategory != Done AND text ~ "<client>"
-```
+### Epics (Job Code)
 
-To populate this table, ask Claude to run:
+After the user selects a project, query:
 
 ```jql
-project = <YOUR_PROJECT_KEY> AND issuetype = Epic AND statusCategory != Done
+project = <SELECTED_KEY> AND issuetype = Epic AND statusCategory != Done ORDER BY updated DESC
 ```
+
+Present all active Epics as a numbered list (Key + Summary) for the user to choose from. If no Epics exist in the selected project, inform the user and ask whether to proceed without a Job Code or pick a different project.
+
+### Sprints
+
+After the user selects a project, query:
+
+```jql
+project = <SELECTED_KEY> AND sprint in openSprints() ORDER BY created DESC
+```
+
+Extract the sprint name and ID from any returned issue's sprint field. Also always include `Backlog` as an option. Present the list for the user to pick from. If no open sprints exist, default to Backlog.
 
 ---
 
@@ -80,7 +88,7 @@ Ask the user: "Atlassian MCP is not connected. Would you like me to install it?"
 On confirmation, run:
 
 ```bash
-claude mcp add atlassian -- npx -y @anthropic-ai/mcp-remote@latest https://mcp.atlassian.com/v1/mcp/authv2
+claude mcp add atlassian -- npx -y mcp-remote@latest https://mcp.atlassian.com/v1/mcp/authv2
 ```
 
 Tell the user: **"MCP has been added. Please restart Claude Code and re-run this skill."** Then **stop**.
@@ -91,7 +99,7 @@ Check the current MCP configuration URL (read from `.claude/settings.json` or eq
 
 - If URL is the deprecated `https://mcp.atlassian.com/v1/sse`:
   - Inform user: "Your Atlassian MCP uses the old v1/sse endpoint, which stops working after June 30, 2026. Updating to v2."
-  - Run: `claude mcp remove atlassian` then `claude mcp add atlassian -- npx -y @anthropic-ai/mcp-remote@latest https://mcp.atlassian.com/v1/mcp/authv2`
+  - Run: `claude mcp remove atlassian` then `claude mcp add atlassian -- npx -y mcp-remote@latest https://mcp.atlassian.com/v1/mcp/authv2`
   - Tell user to restart Claude Code. **Stop**.
 - If already on `v1/mcp/authv2` → continue
 
@@ -120,19 +128,86 @@ Run a test query: `assignee = currentUser() ORDER BY created DESC` (limit 1).
 
 ---
 
-## Step 1 — Get context
+## Step 1 — Get context & dynamic selection
 
-**If the user attached an image** (Teams chat screenshot, email screenshot, etc.) → read it as visual input. Extract: requester name, what's being asked, urgency cues ("when you have capacity" = no deadline; "by Friday" = explicit due date).
+**If the user attached one or more images** (Teams chat screenshots, email screenshots, etc.) → read every image as visual input. Each image may represent a separate task request.
 
-**Always ask these in Step 1 (regardless of whether an image was provided)** — these have no safe default:
+### Multi-image handling
 
-- **Sprint** — `Current sprint` / `Backlog` / `<specific sprint name>`?
+- **Multiple images attached** → Read and parse ALL images, not just the first one. Each image that contains a distinct task request becomes its own ticket. Extract from each image: requester name, what's being asked, urgency cues ("when you have capacity" = no deadline; "by Friday" = explicit due date).
+- **Single image with multiple requests** → If one screenshot contains multiple distinct task requests (e.g. a Teams chat with several asks), create a separate ticket for each request.
+- **Single image, single request** → Standard single-ticket flow.
+
+After parsing all images, present a numbered summary of all tickets to be created (one row per ticket) for user confirmation before proceeding to Step 1a. The user may remove, edit, or reorder tickets at this stage. Then run Step 1a–1d once (project, Epic, Sprint, Assignee apply to all tickets unless the user specifies otherwise per ticket).
+
+### Language detection
+
+Detect the language of the user's request (message text, image content, or inline context). All generated ticket content — Summary, Description (Background, Scope, Source Reference's "Original Request" paraphrase), Acceptance Criteria — must be written in the same language as the request. For example:
+
+- User writes in English → all ticket fields in English
+- User writes in Chinese → all ticket fields in Chinese
+- Image contains English text → English ticket
+- Mixed language → follow the dominant language of the request body
+
+Fixed labels (section headings like "Source Reference", "Background", "Scope", "Acceptance Criteria", "Estimate", and field names like "Requester", "Date", "Source", "Original Request", "Original Estimate") always stay in English for consistency across Jira instances.
+
+### 1a. Auto-query Project list
+
+Call `getVisibleJiraProjects(cloudId)` immediately. Present all projects as a selection list:
+
+```
+Which project should this ticket go in?
+1. PROJ — Project Hub
+2. EPL — (Example) Product Launch
+```
+
+If only one project exists, auto-select it and inform the user.
+
+### 1b. Auto-query Epic (Job Code) list
+
+Once the project is selected, run:
+
+```jql
+project = <SELECTED_KEY> AND issuetype = Epic AND statusCategory != Done ORDER BY updated DESC
+```
+
+Present all active Epics:
+
+```
+Which Epic (Job Code) should this ticket be under?
+1. PROJ-20 — Automation Toolkit
+2. PROJ-18 — Mobile App
+3. PROJ-4 — Admin
+4. None — proceed without Epic
+```
+
+### 1c. Auto-query Sprint list
+
+Run a JQL query to find open sprints in the selected project:
+
+```jql
+project = <SELECTED_KEY> AND sprint in openSprints() ORDER BY created DESC
+```
+
+Extract sprint info from returned issues. Present options:
+
+```
+Which Sprint?
+1. <Sprint Name> (active)
+2. Backlog
+```
+
+If no open sprints exist, default to Backlog and inform the user.
+
+### 1d. Remaining context
+
+**Always ask these (regardless of whether an image was provided)** — these have no safe default:
+
 - **Assignee** — self or a specific person's name?
 - **Reporter** — self or a specific person's name? (often the requester from the screenshot/email)
 
 **If no image and no inline context** → also ask:
 
-- Which client / project?
 - What's the work?
 - Any deadline?
 - Any AC ideas you already have?
@@ -145,7 +220,7 @@ Batch all open questions into a single `AskUserQuestion` call. Don't proceed unt
 
 ## Step 2 — Parse & auto-fill (single review table)
 
-Resolve project key + Job Code from context (use the Mappings table above, or search live). Draft all fields and present in one table for user review:
+Use the project, Epic, and Sprint selected in Step 1 (from live Jira queries). Draft all fields and present in one table for user review:
 
 | # | Field | Auto-filled value | Notes |
 |---|---|---|---|
@@ -153,7 +228,7 @@ Resolve project key + Job Code from context (use the Mappings table above, or se
 | 2 | **Acceptance Criteria** | `<4-6 bullet draft>` covering: deliverable, data correctness, styling/UX consistency, stakeholder sign-off | best-effort draft |
 | 3 | **Estimated hours** | `<inferred from scope, or [TBD]>` | format: `2h`, `30m`, `1d`, `1w` |
 | 4 | **Due date** | `<YYYY-MM-DD or "None">` | omit if user said "when you have capacity" |
-| 5 | **Job Code (Epic)** | `<PROJ-NNN> <Client>` | from Mappings table or JQL search |
+| 5 | **Job Code (Epic)** | `<PROJ-NNN> <Epic name>` | from Dynamic Lookup (Step 1b) |
 | 6 | **Sprint** | `<from Step 1 answer>` | Backlog / Current sprint / specific name — never auto-default |
 | 7 | **Assignee** | `<from Step 1 answer>` | self or named person |
 | 8 | **Reporter** | `<from Step 1 answer>` | self or named person (often requester) |
@@ -207,7 +282,7 @@ additional_fields: {
     }]
   },
   "timetracking": { "originalEstimate": "2h" },
-  "duedate": "2026-05-30",                 // only if exists, else omit
+  "duedate": "<YYYY-MM-DD>",                // only if exists, else omit
   "reporter": { "accountId": "<reporter_account_id>" }  // only if Reporter != default; resolve via lookupJiraAccountId
   // "<SPRINT_FIELD>": <sprintId>           // only if user opted into a non-Backlog Sprint — pass as a NUMBER, not an array
 }
@@ -234,44 +309,215 @@ Take any returned issue's sprint field `[0].id` → use as the new sprint ID. (A
 
 **CRITICAL: Always use `contentFormat: "adf"` (Atlassian Document Format), NOT `"markdown"`.** Markdown mode with `\n` literals renders as plain text in Jira, destroying readability.
 
-Every Description MUST follow this structure using ADF nodes:
+Every Description MUST follow this exact structure. The rendered result in Jira must look like this:
 
-1. **Source Reference** (info panel) — Who requested it, when, where, and original request quote:
-   - `Requester:` name and role/relationship
-   - `Date:` YYYY-MM-DD
-   - `Source:` where the request came from (Teams chat, email, screenshot, meeting, etc.)
-   - `Original Request:` exact quote or paraphrase in quotes
+```
+┌─────────────────────────────────────────────────────┐
+│ ℹ️ (info panel — blue left border)                   │
+│   Requester: <name>                                  │
+│   Date: <YYYY-MM-DD>                                 │
+│   Source: <where the request came from>              │
+│   Original Request: <exact quote or paraphrase>     │
+└─────────────────────────────────────────────────────┘
+                                                       
+  ───────────────── (horizontal rule) ─────────────────
+                                                       
+  Background                              ← H2 heading
+  <1-2 sentences: WHY this work is needed.             
+   Motivation/pain point only. NO deliverables.>       
+                                                       
+  ───────────────── (horizontal rule) ─────────────────
+                                                       
+  Scope                                   ← H2 heading
+  1. **Feature A** — description of deliverable        
+  2. **Feature B** — description of deliverable        
+  3. **Feature C** — description of deliverable        
+                                                       
+  ───────────────── (horizontal rule) ─────────────────
+                                                       
+  Acceptance Criteria                     ← H2 heading
+  ☐ First acceptance criterion                         
+  ☐ Second acceptance criterion                        
+  ☐ Third acceptance criterion                         
+                                                       
+  ───────────────── (horizontal rule) ─────────────────
+                                                       
+  Estimate                                ← H2 heading
+  Original Estimate: <value>                           
+```
 
-2. **Background** (paragraph) — 1-2 sentence explaining WHY this work is needed (motivation, pain point). Do NOT describe deliverables here — that belongs in Scope.
+### Section-by-section rules
 
-3. **Scope** (ordered list) — Each deliverable as a numbered list item: `**Feature name** — description`. Use `orderedList`/`listItem` ADF nodes with bold text for the feature name followed by an em dash and description.
+1. **Source Reference** — `panel` node with `panelType: "info"`. Contains ONE paragraph with 4 lines separated by `hardBreak` nodes. The 4 lines are always:
+   - `Requester: <name>`
+   - `Date: <YYYY-MM-DD>`
+   - `Source: <origin — e.g. Teams chat, email, task list, Slack message>`
+   - `Original Request: <exact quote or close paraphrase>`
 
-4. **Acceptance Criteria** (task list) — Use `taskList`/`taskItem` ADF nodes to render as checkable checkboxes. If the MCP tool rejects `taskList`/`taskItem` with `INVALID_INPUT`, automatically fallback to `bulletList`/`listItem` and inform the user they can convert to checkboxes in Jira UI (select list → click ☑ toolbar button).
+2. **Background** — `heading` (level 2) + single `paragraph`. Write only WHY (motivation, pain point). Do NOT describe deliverables — that belongs in Scope.
 
-5. **Estimate** (paragraph) — `Original Estimate: <value>`
+3. **Scope** — `heading` (level 2) + `orderedList` with `listItem` nodes. Each item: **bold feature name** followed by ` — ` (space-em-dash-space) then description. Use `strong` mark on the feature name text node only.
 
-ADF skeleton:
+4. **Acceptance Criteria** — `heading` (level 2) + `taskList` with `taskItem` nodes (renders as checkboxes ☐). Each `taskItem` has `attrs: {"localId": "<uuid>", "state": "TODO"}`. If the MCP tool rejects `taskList`/`taskItem` with `INVALID_INPUT`, fallback to `bulletList`/`listItem` and inform the user to convert in Jira UI.
+
+5. **Estimate** — `heading` (level 2) + single `paragraph`: `Original Estimate: <value>`.
+
+6. **Horizontal rules** — Insert a `rule` node between every section (after Source Reference, after Background, after Scope, after Acceptance Criteria). Total of 4 `rule` nodes.
+
+### Complete ADF example
+
+This is a full, copy-paste-ready ADF document. Replace placeholder values but preserve the exact node structure:
 
 ```json
 {
-  "type": "doc", "version": 1,
+  "type": "doc",
+  "version": 1,
   "content": [
-    { "type": "panel", "attrs": {"panelType": "info"}, "content": [/* Source Reference */] },
+    {
+      "type": "panel",
+      "attrs": { "panelType": "info" },
+      "content": [
+        {
+          "type": "paragraph",
+          "content": [
+            { "type": "text", "text": "Requester: Sarah Chen" },
+            { "type": "hardBreak" },
+            { "type": "text", "text": "Date: 2026-05-27" },
+            { "type": "hardBreak" },
+            { "type": "text", "text": "Source: Teams chat" },
+            { "type": "hardBreak" },
+            { "type": "text", "text": "Original Request: Auto-delete promotional emails that haven't been opened for 7 days" }
+          ]
+        }
+      ]
+    },
     { "type": "rule" },
-    { "type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Background"}] },
-    { "type": "paragraph", "content": [/* ... */] },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "content": [{ "type": "text", "text": "Background" }]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "text",
+          "text": "The inbox accumulates a large volume of advertising and promotional emails. Manual cleanup is time-consuming. An automated rule is needed to identify long-unopened promotional emails and clean them up automatically, keeping the inbox organized."
+        }
+      ]
+    },
     { "type": "rule" },
-    { "type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Scope"}] },
-    { "type": "orderedList", "content": [/* listItem: bold feature — description */] },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "content": [{ "type": "text", "text": "Scope" }]
+    },
+    {
+      "type": "orderedList",
+      "attrs": { "order": 1 },
+      "content": [
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                { "type": "text", "text": "Promotional email detection", "marks": [{ "type": "strong" }] },
+                { "type": "text", "text": " — Identify advertising/promotional emails based on labels, sender, and subject keywords" }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                { "type": "text", "text": "Open status tracking", "marks": [{ "type": "strong" }] },
+                { "type": "text", "text": " — Track email open status and flag promotional emails unopened for more than 7 days" }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                { "type": "text", "text": "Auto-cleanup execution", "marks": [{ "type": "strong" }] },
+                { "type": "text", "text": " — Automatically move qualifying emails to trash or delete them directly" }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                { "type": "text", "text": "Whitelist protection", "marks": [{ "type": "strong" }] },
+                { "type": "text", "text": " — Provide a whitelist mechanism to prevent accidental deletion of important emails" }
+              ]
+            }
+          ]
+        }
+      ]
+    },
     { "type": "rule" },
-    { "type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Acceptance Criteria"}] },
-    { "type": "taskList", "attrs": {"localId": "<uuid>"}, "content": [/* taskItem nodes with state="TODO" */] },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "content": [{ "type": "text", "text": "Acceptance Criteria" }]
+    },
+    {
+      "type": "taskList",
+      "attrs": { "localId": "ac-list-001" },
+      "content": [
+        {
+          "type": "taskItem",
+          "attrs": { "localId": "ac-001", "state": "TODO" },
+          "content": [{ "type": "text", "text": "Identify advertising/promotional emails based on labels, sender, and subject keywords" }]
+        },
+        {
+          "type": "taskItem",
+          "attrs": { "localId": "ac-002", "state": "TODO" },
+          "content": [{ "type": "text", "text": "Track email open status and flag emails unopened for more than 7 days" }]
+        },
+        {
+          "type": "taskItem",
+          "attrs": { "localId": "ac-003", "state": "TODO" },
+          "content": [{ "type": "text", "text": "Automatically move qualifying emails to trash or delete them directly" }]
+        },
+        {
+          "type": "taskItem",
+          "attrs": { "localId": "ac-004", "state": "TODO" },
+          "content": [{ "type": "text", "text": "Provide a whitelist mechanism to prevent accidental deletion of important emails" }]
+        },
+        {
+          "type": "taskItem",
+          "attrs": { "localId": "ac-005", "state": "TODO" },
+          "content": [{ "type": "text", "text": "Generate a cleanup report summary" }]
+        }
+      ]
+    },
     { "type": "rule" },
-    { "type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Estimate"}] },
-    { "type": "paragraph", "content": [/* Original Estimate: Xh/Xd/Xw */] }
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "content": [{ "type": "text", "text": "Estimate" }]
+    },
+    {
+      "type": "paragraph",
+      "content": [{ "type": "text", "text": "Original Estimate: 1d" }]
+    }
   ]
 }
 ```
+
+**When generating a new ticket, copy this exact ADF structure. Only replace the text values — never change the node types, nesting, or order.**
 
 ---
 

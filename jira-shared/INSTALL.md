@@ -1,95 +1,223 @@
-# Jira Skills — Installation & Setup
+# Atlassian MCP — Pre-installation Guide
 
-Both `create-jira-tickets` and `close-sprint-tickets` share the same Atlassian MCP dependency. This guide documents the automated setup flow that runs on first use of either skill.
-
----
-
-## Step 0 — Test MCP Connection
-
-Try calling any Atlassian MCP tool (e.g. `getVisibleJiraProjects` or `atlassianUserInfo`).
-
-- **Success** → proceed to Step 1b (version check)
-- **Failure** → proceed to Step 1 (install)
+> **Run this guide BEFORE installing any Jira skills.** Setting up the Atlassian MCP connection first ensures the skills work immediately on first use — no restarts needed mid-workflow.
 
 ---
 
-## Step 1 — Install Atlassian MCP (only if Step 0 failed)
+## Prerequisites
 
-Ask the user: "Atlassian MCP is not connected. Would you like me to install it?"
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed and working (CLI, Desktop App, or IDE extension)
+- A Jira Cloud instance (e.g. `https://yoursite.atlassian.net`)
+- An Atlassian account with permissions to create/edit issues
 
-On confirmation, run:
+---
+
+## Choose Your Installation Method
+
+There are two ways to connect Claude Code to your Atlassian instance. Pick one — they are functionally equivalent.
+
+| Method | Best for | Requires |
+|--------|----------|----------|
+| **Method 1: Connector (Recommended)** | All users — visual, no terminal commands needed | Claude Code Desktop App or IDE extension |
+| **Method 2: CLI** | Developers who prefer terminal commands | Node.js 18+ |
+
+---
+
+## Method 1: Connector Installation (Recommended)
+
+### 1.1. Open the Claude Code Directory
+
+In the Claude Code Desktop App or IDE extension, open the **Directory** panel:
+
+- **Desktop App**: Click the Directory icon in the sidebar (or use the menu)
+- **IDE extension**: Open the Claude Code panel → click Directory
+
+### 1.2. Search for the Atlassian connector
+
+1. In the Directory, click the **Connectors** tab on the left sidebar
+2. Type **`jira`** in the search bar
+3. You will see **Atlassian Rovo** — "Access Jira & Confluence from Claude"
+
+### 1.3. Install the connector
+
+1. Click the **+** button on the **Atlassian Rovo** card
+2. Follow the on-screen prompts to complete the installation
+3. When prompted, authorize with your Atlassian account:
+   - Browser opens automatically → Atlassian login page
+   - Log in with your Atlassian account (if not already logged in)
+   - Review the permissions requested → click **Accept**
+   - Browser shows "Authorization successful" → return to Claude Code
+
+### 1.4. Restart Claude Code
+
+Close and reopen Claude Code (or restart the session). This is required for the new MCP server to be loaded.
+
+### 1.5. Verify the connection
+
+In Claude Code, ask:
+
+```
+"List my Jira projects"
+```
+
+Claude should return your project list with keys and names. If you see your projects, the connection is working. Proceed to the **Verification Checklist** below.
+
+---
+
+## Method 2: CLI Installation
+
+### 2.1. Add the Atlassian MCP server
+
+Open your terminal and run:
 
 ```bash
-claude mcp add atlassian -- npx -y @anthropic-ai/mcp-remote@latest https://mcp.atlassian.com/v1/mcp/authv2
+claude mcp add atlassian -- npx -y mcp-remote@latest https://mcp.atlassian.com/v1/mcp/authv2
 ```
 
-Then tell the user: **"MCP has been added. Please restart Claude Code and re-run this skill."**
+This registers the Atlassian MCP server with Claude Code using the latest v2 authentication endpoint.
 
-Stop here — the skill will re-enter Step 0 on next invocation after restart.
+> **Note:** This method requires Node.js 18+. Run `node --version` to check. Install from [nodejs.org](https://nodejs.org/) if needed.
+
+### 2.2. Restart Claude Code
+
+Close and reopen Claude Code (or restart the CLI session). This is required for the new MCP server to be loaded.
+
+```bash
+# If using CLI, simply exit and re-launch:
+exit
+claude
+```
+
+### 2.3. Authorize with Atlassian
+
+On the first MCP tool call after restart, your browser will open an Atlassian OAuth consent page. Complete the authorization flow:
+
+1. Browser opens automatically → Atlassian login page
+2. Log in with your Atlassian account (if not already logged in)
+3. Review the permissions requested → click **Accept**
+4. Browser shows "Authorization successful" → return to Claude Code
+
+If the browser does not open automatically, check the terminal output for a URL and open it manually.
+
+### 2.4. Verify the connection
+
+In Claude Code, ask:
+
+```
+"List my Jira projects"
+```
+
+Claude should return your project list with keys and names. If you see your projects, the connection is working.
 
 ---
 
-## Step 1b — Verify MCP Endpoint Version (runs even if Step 0 passed)
+## Verification Checklist
 
-Check the current MCP configuration URL. The correct endpoint is:
+After installation (either method), run through this checklist to confirm everything works. Ask Claude to perform each step:
+
+### 1. MCP server is registered
+
+```bash
+claude mcp list
+```
+
+You should see `atlassian` in the output.
+
+### 2. OAuth is authorized
+
+Ask Claude:
 
 ```
-https://mcp.atlassian.com/v1/mcp/authv2
+"Show my Atlassian user info"
 ```
 
-If the URL is the deprecated `https://mcp.atlassian.com/v1/sse`:
+Claude calls `atlassianUserInfo` and returns your display name and account ID. If you get an auth error, re-run the OAuth flow (remove and re-add the MCP server).
 
-1. Inform the user: "Your Atlassian MCP uses the old v1/sse endpoint, which will stop working after June 30, 2026. Updating to v2."
-2. Run:
+### 3. Jira projects are accessible
 
-   ```bash
-   claude mcp remove atlassian
-   claude mcp add atlassian -- npx -y @anthropic-ai/mcp-remote@latest https://mcp.atlassian.com/v1/mcp/authv2
-   ```
+Ask Claude:
 
-3. Remind user to restart Claude Code.
+```
+"List my Jira projects"
+```
 
-If already on v2 → continue.
+Claude calls `getVisibleJiraProjects` and returns your project list with keys and names.
+
+### 4. Issues are queryable
+
+Ask Claude:
+
+```
+"Show my most recent Jira ticket"
+```
+
+Claude runs `assignee = currentUser() ORDER BY created DESC` (limit 1) and returns a ticket. This confirms read access to your Jira issues.
+
+### 5. (Optional) Write access test
+
+If you want to confirm write access before using the skills:
+
+Ask Claude:
+
+```
+"Create a test ticket in <YOUR_PROJECT_KEY> with summary 'MCP connection test'"
+```
+
+This confirms `createJiraIssue` works. You can delete the test ticket manually in the Jira UI afterwards.
 
 ---
 
-## Step 2 — Auto-discover Parameters & Fill Configuration
+## Post-installation: Install Jira Skills
 
-All values are discovered automatically via MCP API calls:
+Once all verification checks pass, install the Jira skills. No further restarts are needed.
 
-| Parameter | How to discover | Used by |
-|---|---|---|
-| `JIRA_CLOUD_ID` | `getAccessibleAtlassianResources` → `id` | Both skills |
-| `JIRA_SITE_URL` | `getAccessibleAtlassianResources` → `url` | Both skills |
-| `JIRA_ACCOUNT_ID` | `atlassianUserInfo` → `accountId` | Both skills |
-| `AC_CUSTOM_FIELD` | `getJiraIssueTypeMetaWithFields` → search for "Acceptance Criteria" | create-jira-tickets only |
-| `EPIC_LINK_FIELD` | `getJiraIssueTypeMetaWithFields` → search for "Epic Link" | create-jira-tickets only |
-| `SPRINT_FIELD` | `getJiraIssueTypeMetaWithFields` → search for "Sprint" | create-jira-tickets only |
+### Option 1: Install from GitHub
 
-After discovery, the skill automatically writes these values into its own SKILL.md User Configuration table, replacing any `<YOUR_...>` placeholders.
-
-Present all discovered values to the user for confirmation before writing.
-
----
-
-## Step 3 — Verify End-to-End
-
-Run a test query to confirm everything works:
-
-```jql
-assignee = currentUser() ORDER BY created DESC
+```bash
+claude install-skill https://github.com/<owner>/<repo>/tree/main/skills/create-jira-tickets
+claude install-skill https://github.com/<owner>/<repo>/tree/main/skills/close-sprint-tickets
 ```
 
-- **Success** → "Setup complete. You can now use the skill."
-- **Failure** → display error and suggest checking MCP connection or Jira permissions.
+### Option 2: Install from local directory
+
+```bash
+claude install-skill ./skills/create-jira-tickets
+claude install-skill ./skills/close-sprint-tickets
+```
+
+The skills will auto-detect the existing MCP connection on first use and skip the MCP installation step entirely.
 
 ---
 
-## Manual Troubleshooting
+## Upgrading from v1 (Legacy Endpoint)
 
-If the automated flow fails:
+If you previously installed the Atlassian MCP with the old `v1/sse` endpoint:
 
-1. **MCP not found after install**: Make sure you restarted Claude Code after `claude mcp add`.
-2. **Auth errors**: The first time you connect, Atlassian will prompt for OAuth consent in your browser. Make sure to complete the authorization flow.
-3. **Wrong Cloud ID**: If you have multiple Atlassian sites, `getAccessibleAtlassianResources` returns all of them. Pick the correct one.
-4. **Custom fields not found**: Field IDs vary by project and Jira instance. The auto-discovery searches the Story issue type. If your project uses different issue types, run discovery manually with the correct `issueTypeId`.
+```
+https://mcp.atlassian.com/v1/sse    <- deprecated, stops working after June 30, 2026
+```
+
+Upgrade to v2:
+
+```bash
+claude mcp remove atlassian
+claude mcp add atlassian -- npx -y mcp-remote@latest https://mcp.atlassian.com/v1/mcp/authv2
+```
+
+Then restart Claude Code. Your existing OAuth authorization carries over — no need to re-authorize.
+
+---
+
+## Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| `MCP tool not found` after install | Restart Claude Code — MCP servers are loaded at startup |
+| Browser does not open for OAuth | Check terminal output for a URL and open it manually |
+| OAuth consent page shows error | Ensure your Atlassian account has admin or project-level permissions |
+| `getVisibleJiraProjects` returns empty | Your account may not have "Create Issues" permission — check Jira project settings |
+| `401 Unauthorized` errors | OAuth token may have expired — run `claude mcp remove atlassian` then re-add and re-authorize |
+| Multiple Atlassian sites | `getAccessibleAtlassianResources` returns all sites — the skills will ask you to pick the correct one on first use |
+| Node.js version error (CLI only) | MCP remote proxy requires Node.js 18+. Run `node --version` to check |
+| `npx` not found (CLI only) | Install Node.js from [nodejs.org](https://nodejs.org/) or via your package manager |
+| Connector not visible in Directory | Ensure you are using Claude Code Desktop App or IDE extension — the Directory panel is not available in the CLI |
