@@ -6,7 +6,7 @@
 
 ## Prerequisites
 
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed and working (CLI, Desktop App, or IDE extension)
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed and working (CLI, Desktop App, https://claude.ai/ or IDE extension)
 - A Jira Cloud instance (e.g. `https://yoursite.atlassian.net`)
 - An Atlassian account with permissions to create/edit issues
 
@@ -18,32 +18,30 @@ There are two ways to connect Claude Code to your Atlassian instance. Pick one �
 
 | Method | Best for | Requires |
 |--------|----------|----------|
-| **Method 1: Connector (Recommended)** | All users — visual, no terminal commands needed | Claude Code Desktop App or IDE extension |
+| **Method 1: Connector (Recommended)** | All users — visual, no terminal commands needed | Claude Code Desktop App or https://claude.ai/ |
 | **Method 2: CLI** | Developers who prefer terminal commands | Node.js 18+ |
 
 ---
 
 ## Method 1: Connector Installation (Recommended)
 
-### 1.1. Open the Claude Code Directory
+### 1.1. Open the Claude Code Desktop App or https://claude.ai/
 
-In the Claude Code Desktop App or IDE extension, open the **Directory** panel:
-<img width="1240" height="191" alt="image" src="https://github.com/user-attachments/assets/9dfc265b-204e-46e6-92e8-bb92afec74bc" />
+In the Claude Code Desktop App or https://claude.ai/, click the **+** button next to your prompt window, select add connectors:
+<img width="1157" height="693" alt="image" src="https://github.com/user-attachments/assets/13740e01-fcab-45d1-8499-a2fa1fd801c7" />
 
-- **Desktop App**: Click the + button at the bottom of the UI, Add connectors
 
 ### 1.2. Search for the Atlassian connector
 
 1. Type **`jira`** in the search bar
 2. You will see **Atlassian Rovo** — "Access Jira & Confluence from Claude"
-<img width="784" height="725" alt="image" src="https://github.com/user-attachments/assets/82daf6e6-b73c-48c6-aad8-001be86e1b5e" />
+<img width="1561" height="422" alt="image" src="https://github.com/user-attachments/assets/2158c535-5f4d-486d-bed4-49c20f6118c5" />
 
 
 ### 1.3. Install the connector
 
-1. Click the **+** button on the **Atlassian Rovo** card
-2. Follow the on-screen prompts to complete the installation
-3. When prompted, authorize with your Atlassian account:
+1. Click the **+** button on the **Atlassian Rovo** card to finish the installation
+2. Authorize with your Atlassian account:
    - Browser opens automatically → Atlassian login page
    - Log in with your Atlassian account (if not already logged in)
    - Review the permissions requested → click **Accept**
@@ -154,19 +152,6 @@ Ask Claude:
 
 Claude runs `assignee = currentUser() ORDER BY created DESC` (limit 1) and returns a ticket. This confirms read access to your Jira issues.
 
-### 5. (Optional) Write access test
-
-If you want to confirm write access before using the skills:
-
-Ask Claude:
-
-```
-"Create a test ticket in <YOUR_PROJECT_KEY> with summary 'MCP connection test'"
-```
-
-This confirms `createJiraIssue` works. You can delete the test ticket manually in the Jira UI afterwards.
-
----
 
 ## Post-installation: Install Jira Skills
 
