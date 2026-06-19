@@ -4,6 +4,14 @@
 
 ---
 
+## Demo
+
+See the skill in action — from invocation to a fully formatted Jira ticket in under 60 seconds:
+
+https://github.com/yzd-bill/jira-skills-latest/raw/main/assets/demo.mp4
+
+---
+
 ## Prerequisites
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed and working (CLI, Desktop App, https://claude.ai/ or IDE extension)

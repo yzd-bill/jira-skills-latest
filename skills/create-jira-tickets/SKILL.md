@@ -211,6 +211,8 @@ If no open sprints exist, default to Backlog and inform the user.
 - What's the work?
 - Any deadline?
 - Any AC ideas you already have?
+- **Requester** — who originated this request? (default: self)
+- **Source** — where did this request come from? (e.g. Teams, email, verbal, self-initiated — default: "Self-initiated")
 
 Batch all open questions into a single `AskUserQuestion` call. Don't proceed until you have enough to attempt a draft. One round of questions is usually enough.
 
@@ -349,9 +351,15 @@ Every Description MUST follow this exact structure. The rendered result in Jira 
    - `Source: <origin — e.g. Teams chat, email, task list, Slack message>`
    - `Original Request: <exact quote or close paraphrase>`
 
-2. **Background** — `heading` (level 2) + single `paragraph`. Write only WHY (motivation, pain point). Do NOT describe deliverables — that belongs in Scope.
+2. **Background** — `heading` (level 2) + single `paragraph`. Write only WHY (motivation, pain point). Do NOT describe deliverables — that belongs in Scope. Do NOT restate the request details already captured in the Source Reference panel — the reader can see both sections on the same page. Background should add NEW context (motivation, business impact, urgency reason) that is not already in the Source Reference.
 
-3. **Scope** — `heading` (level 2) + `orderedList` with `listItem` nodes. Each item: **bold feature name** followed by ` — ` (space-em-dash-space) then description. Use `strong` mark on the feature name text node only.
+   ❌ `"Mike has requested via Teams that the invoice be sent to Anna by Monday."` — this is just a rewrite of Source Reference.
+   ✅ `"Timely invoice delivery is required to meet the payment cycle deadline. Late delivery may incur penalty fees."` — this adds WHY (business impact not already stated).
+
+3. **Scope** — `heading` (level 2) + `orderedList` with `listItem` nodes. Each item: **bold feature name** followed by ` — ` (space-em-dash-space) then description. Use `strong` mark on the feature name text node only. Even for simple, single-action scope items, you MUST split into bold feature name + em-dash + description. Never write a scope item as a plain sentence without the bold prefix.
+
+   ❌ `"Send the invoice to Anna by Monday"`
+   ✅ `"**Invoice delivery** — Send the invoice to Anna by Monday"`
 
 4. **Acceptance Criteria** — `heading` (level 2) + `taskList` with `taskItem` nodes (renders as checkboxes ☐). Each `taskItem` has `attrs: {"localId": "<uuid>", "state": "TODO"}`. If the MCP tool rejects `taskList`/`taskItem` with `INVALID_INPUT`, fallback to `bulletList`/`listItem` and inform the user to convert in Jira UI.
 
