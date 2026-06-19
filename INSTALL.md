@@ -8,7 +8,7 @@
 
 See the skill in action — from invocation to a fully formatted Jira ticket in under 60 seconds:
 
-https://github.com/yzd-bill/jira-skills-latest/raw/main/assets/demo.mp4
+[https://github.com/yzd-bill/jira-skills-latest/raw/main/assets/demo.mp4](https://github.com/user-attachments/assets/a6aa3f40-d9ce-46a2-8417-496b99ac392d)
 
 ---
 
